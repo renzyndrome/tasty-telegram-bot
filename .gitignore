@@ -1,2 +1,3 @@
 env/
+*.env
 tasty-service-acct-creds.json

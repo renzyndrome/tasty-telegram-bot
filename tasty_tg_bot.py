@@ -1,11 +1,16 @@
 import logging
+import os
 import gspread
 import re
-import asyncio
 from collections import deque
 from oauth2client.service_account import ServiceAccountCredentials
+import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Enable logging
 logging.basicConfig(
@@ -13,16 +18,75 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Set logging level for less important modules to WARNING
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
+
+# Load environment variables
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+GOOGLE_SHEET_CREDENTIALS = os.getenv("GOOGLE_SHEET_CREDENTIALS")
+GOOGLE_SHEET_KEY = os.getenv("GOOGLE_SHEET_KEY")
+
 # Google Sheets setup
-scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets', "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("tasty-service-acct-creds.json", scope)
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    'https://www.googleapis.com/auth/spreadsheets',
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive"
+]
+creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_SHEET_CREDENTIALS, scope)
 client = gspread.authorize(creds)
-sheet = client.open_by_key("sheet").sheet1
+sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
 
 # Queue to hold incoming messages
 message_queue = deque()
 
-# Extraction functions
+# Define the expected message pattern
+# MESSAGE_PATTERN = re.compile(
+#     r'^Summary of Tips and VIPs for (.+?)\s*\n'
+#     r'(\w+ \d+, \d{4}):\s*(\d+[AP]M-\d+[AP]M PST)\s*\n'
+#     r'Shift\s*\((\d+) hours\)\s*\n'
+#     r'Creator\s*:\s*(.*?)\s*\n\n'
+#     r'VIP/Tips:\s*\n(.*?)\n\n'
+#     r'PPVs:\s*\n(.*?)\n\n'
+#     r'TOTAL GROSS SALE:\s*\$\s*(\d+)\s*\n'
+#     r'TOTAL NET SALE:\s*\$\s*(\d+)\s*$', re.IGNORECASE | re.DOTALL
+# )
+MESSAGE_PATTERN = re.compile(
+    r'^Summary of Tips and VIPs for (.+)\n'
+    r'(\w+ \d+, \d{4}): (\d+[AP]M-\d+[AP]M PST)\n'
+    r'Shift \((\d+) hours\)\n'
+    r'Creator\s*:\s*(.*?)\n+'
+    r'VIP/Tips:\n'
+    r'(.*?)\n+'
+    r'PPVs:\n'
+    r'(.*?)\n+'
+    r'TOTAL GROSS SALE:\s*\$\s*(\d+)\n'
+    r'TOTAL NET SALE:\s*\$\s*(\d+)\n', re.IGNORECASE | re.DOTALL
+)
+
+
+
+# Define extraction functions
+def extract_data(text):
+    logger.info(f'{text}')
+    match = MESSAGE_PATTERN.match(text)
+    logger.info(f'{match}')
+    if match:
+        return {
+            'name': match.group(1).strip(),
+            'date_shift': f"{match.group(2)} {match.group(3)}",
+            'creator': match.group(4).strip(),
+            'vip_tips': match.group(5).strip(),
+            'ppvs': match.group(6).strip(),
+            'total_gross_sale': match.group(7).strip(),
+            'total_net_sale': match.group(8).strip(),
+            'shift_hours': match.group(9).strip(),
+            'dollar_sales': match.group(10).strip(),
+        }
+    return None
+
+# Define extraction functions
 def extract_name(text):
     match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
     if match:
@@ -30,27 +94,33 @@ def extract_name(text):
     return None
 
 def extract_date_shift(text):
-    match = re.search(r'(\w+ \d+, \d+:\s*\d+AM-\d+AM PST)', text, re.IGNORECASE)
+    match = re.search(r'(\w+ \d+, \d{4}): (\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
+    if match:
+        return f"{match.group(1)} {match.group(2)}"
+    return None
+
+def extract_shift_hours(text):
+    match = re.search(r'Shift\s*\((\d+)\s*hours\)', text, re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return None
 
 def extract_creator(text):
-    match = re.search(r'Creator :\s*(.*)', text, re.IGNORECASE)
+    match = re.search(r'Creator\s*:\s*(.*)', text, re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return None
 
 def extract_vip_tips(text):
-    matches = re.findall(r'\$(\d+) TIP from @\w+', text, re.IGNORECASE)
+    matches = re.findall(r'\$(\d+)\s*TIP\s*from\s*@\w+', text, re.IGNORECASE)
     if matches:
         return ', '.join(matches)
     return None
 
 def extract_ppvs(text):
-    matches = re.findall(r'\$(\d+) PPV PAID (from )?@\w+', text, re.IGNORECASE)
+    matches = re.findall(r'\$(\d+)\s*PPV PAID\s*from\s*@\w+', text, re.IGNORECASE)
     if matches:
-        return ', '.join(match[0] for match in matches)
+        return ', '.join(matches)
     return None
 
 def extract_total_gross_sale(text):
@@ -65,47 +135,101 @@ def extract_total_net_sale(text):
         return match.group(1).strip()
     return None
 
+def extract_dollar_sales(text):
+    match = re.search(r'\$ in sales = \$(\d+)', text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return None
+
 # Define a few command handlers
 async def start(update: Update, context: CallbackContext) -> None:
     logger.info('Received /start command')
     await update.message.reply_text('Hi! I am your bot.')
 
+
+## List of emojis to choose from
+emojis = ['📊', '📈', '📉', '💰', '👍', '✅', '🚀', '💡', '💬']
+
+# Define a function to set a reaction on a message
+async def set_reaction(context: CallbackContext, chat_id, message_id, reaction):
+    try:
+        await context.bot.setMessageReaction(chat_id, message_id, reaction)
+        logger.info(f"Reaction set to {reaction} on message {message_id}")
+    except Exception as e:
+        logger.error(f"Failed to set reaction: {e}")
+
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     logger.info(f'Received message: {text}')
-    
+
+    # Extract data from the message text
+    name = extract_name(text)
+    date_shift = extract_date_shift(text)
+    creator = extract_creator(text)
+    vip_tips = extract_vip_tips(text)
+    ppvs = extract_ppvs(text)
+    total_gross_sale = extract_total_gross_sale(text)
+    total_net_sale = extract_total_net_sale(text)
+    shift_hours = extract_shift_hours(text)
+    dollar_sales = extract_dollar_sales(text)
+
+    if not all([name, date_shift, creator, total_gross_sale, total_net_sale, shift_hours, dollar_sales]):
+        logger.warning(f'Invalid input format: {text}')
+        await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1701 👈🏻')
+        return
+
     # Add message to the queue
-    message_queue.append(text)
+    message_queue.append((update.message.chat_id, {
+        'name': name,
+        'date_shift': date_shift,
+        'creator': creator,
+        'vip_tips': vip_tips,
+        'ppvs': ppvs,
+        'total_gross_sale': total_gross_sale,
+        'total_net_sale': total_net_sale,
+        'shift_hours': shift_hours,
+        'dollar_sales': dollar_sales
+    }))
+
+    # React with a random emoji
+    random_emoji = random.choice(emojis)
+    chat_id = update.effective_chat.id
+    message_id = update.message.message_id
+    try:
+        await context.bot.set_message_reaction(chat_id, message_id, reaction="🎉")
+        logger.info(f"Reaction on message {message_id}")
+    except Exception as e:
+        logger.error(f"Failed to set reaction: {e}")
+
 
 async def process_queue(context: CallbackContext) -> None:
-    if message_queue:
-        batch = list(message_queue)
-        message_queue.clear()
-        
-        # Process each message in the batch
-        for text in batch:
-            name = extract_name(text)
-            date_shift = extract_date_shift(text)
-            creator = extract_creator(text)
-            vip_tips = extract_vip_tips(text)
-            ppvs = extract_ppvs(text)
-            total_gross_sale = extract_total_gross_sale(text)
-            total_net_sale = extract_total_net_sale(text)
-            
-            # Log extracted data
-            logger.info(f'Extracted data: name={name}, date_shift={date_shift}, creator={creator}, vip_tips={vip_tips}, ppvs={ppvs}, total_gross_sale={total_gross_sale}, total_net_sale={total_net_sale}')
-            
-            # Append a new row to the Google Sheet with the extracted data
-            try:
-                row = [name, date_shift, 'Shift (8 hours)', creator, vip_tips, ppvs, total_gross_sale, total_net_sale, total_net_sale]
-                await asyncio.to_thread(sheet.append_row, row)
-                logger.info('Data appended to Google Sheet')
-            except Exception as e:
-                logger.error(f'Error appending data to Google Sheet: {e}')
+    while message_queue:
+        chat_id, data = message_queue.popleft()
+
+        # Log extracted data
+        logger.info(f'Extracted data: {data}')
+
+        try:
+            # Add a new row to the Google Sheet
+            sheet.append_row([
+                data['date_shift'],
+                data['name'],
+                data['shift_hours'],
+                data['creator'],
+                data['vip_tips'],
+                data['ppvs'],
+                data['total_gross_sale'],
+                data['total_net_sale'],
+                data['dollar_sales']
+            ])
+            logger.info('Data successfully appended to the Google Sheet.')
+
+        except Exception as e:
+            logger.error(f'Failed to append data to the Google Sheet: {e}')
 
 def main() -> None:
     # Create the Application and pass it your bot's token.
-    application = Application.builder().token("TG BOT KEY").build()
+    application = Application.builder().token(TOKEN).build()
 
     # on different commands - answer in Telegram
     application.add_handler(CommandHandler("start", start))
@@ -113,13 +237,11 @@ def main() -> None:
     # on non-command i.e message - handle the message
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Start the queue processing task
+    # Run the process_queue function every 10 seconds
     job_queue = application.job_queue
-    job = job_queue.run_repeating(process_queue, interval=30, first=0)
-    job.modify(max_instances=3)  # Set the maximum number of concurrent instances
+    job_queue.run_repeating(process_queue, interval=10, first=10)
 
-    # Start the Bot
-    logger.info('Starting the bot...')
+    # Run the bot until you press Ctrl-C
     application.run_polling()
 
 if __name__ == '__main__':
