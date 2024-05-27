@@ -44,56 +44,88 @@ message_queue = deque()
 def extract_name(text):
     match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        name = match.group(1).strip()
+        logger.info(f'Extracted name: {name}')
+        return name
+    logger.warning(f'Failed to extract name from text: {text}')
     return None
 
 def extract_date_shift(text):
-    match = re.search(r'(\w+ \d+, \d{4}):\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
+    match = re.search(r'(\w+ \d+, \d{4})\s*-\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
     if match:
-        return f"{match.group(1)} {match.group(2)}"
+        date_shift = f"{match.group(1)} {match.group(2)}"
+        logger.info(f'Extracted date_shift: {date_shift}')
+        return date_shift
+    logger.warning(f'Failed to extract date_shift from text: {text}')
     return None
 
 def extract_shift_hours(text):
     match = re.search(r'Shift\s*\((\d+)\s*hours\)', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        shift_hours = match.group(1).strip()
+        logger.info(f'Extracted shift_hours: {shift_hours}')
+        return shift_hours
+    logger.warning(f'Failed to extract shift_hours from text: {text}')
     return None
 
 def extract_creator(text):
     match = re.search(r'Creator\s*:\s*(.*)', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        creator = match.group(1).strip()
+        logger.info(f'Extracted creator: {creator}')
+        return creator
+    logger.warning(f'Failed to extract creator from text: {text}')
     return None
 
 def extract_vip_tips(text):
-    matches = re.findall(r'\$(\d+)\s*TIP\s*from\s*@\w+', text, re.IGNORECASE)
-    if matches:
-        return ', '.join(matches)
+    vip_section = re.search(r'VIP/Tips:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
+    if vip_section:
+        amounts = re.findall(r'\$(\d+)', vip_section.group(1))
+        if amounts:
+            vip_tips = ', '.join([f"${amount}" for amount in amounts])
+            logger.info(f'Extracted vip_tips: {vip_tips}')
+            return vip_tips
+    logger.warning(f'Failed to extract vip_tips from text: {text}')
     return None
 
 def extract_ppvs(text):
-    matches = re.findall(r'\$(\d+)\s*PPV PAID\s*from\s*@\w+', text, re.IGNORECASE)
-    if matches:
-        return ', '.join(matches)
+    ppv_section = re.search(r'PPVs:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
+    if ppv_section:
+        amounts = re.findall(r'\$(\d+)', ppv_section.group(1))
+        if amounts:
+            ppvs = ', '.join([f"${amount}" for amount in amounts])
+            logger.info(f'Extracted ppvs: {ppvs}')
+            return ppvs
+    logger.warning(f'Failed to extract ppvs from text: {text}')
     return None
 
 def extract_total_gross_sale(text):
-    match = re.search(r'TOTAL GROSS SALE:\s*\$\s*(\d+)', text, re.IGNORECASE)
+    match = re.search(r'TOTAL GROSS SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        total_gross_sale = f"${match.group(1).replace(',', '').strip()}"
+        logger.info(f'Extracted total_gross_sale: {total_gross_sale}')
+        return total_gross_sale
+    logger.warning(f'Failed to extract total_gross_sale from text: {text}')
     return None
 
 def extract_total_net_sale(text):
-    match = re.search(r'TOTAL NET SALE:\s*\$\s*(\d+)', text, re.IGNORECASE)
+    match = re.search(r'TOTAL NET SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        total_net_sale = f"${match.group(1).replace(',', '').strip()}"
+        logger.info(f'Extracted total_net_sale: {total_net_sale}')
+        return total_net_sale
+    logger.warning(f'Failed to extract total_net_sale from text: {text}')
     return None
 
 def extract_dollar_sales(text):
-    match = re.search(r'\$ in sales = \$(\d+)', text, re.IGNORECASE)
+    match = re.search(r'\$(\d+,\d+)\s+in\s+sales\s+=\s+\$(\d+)\s+bonus', text, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
-    return None
+        dollar_sales = f"${match.group(1).replace(',', '').strip()}"
+        bonus = f"${match.group(2).replace(',', '').strip()}"
+        logger.info(f'Extracted dollar_sales: {dollar_sales}, bonus: {bonus}')
+        return dollar_sales, bonus
+    logger.warning(f'Failed to extract dollar_sales and bonus from text: {text}')
+    return None, None
 
 # Define a few command handlers
 async def start(update: Update, context: CallbackContext) -> None:
@@ -114,6 +146,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
     # Check if the message contains the specific phrase
     if 'Summary of Tips and VIPs for' not in text:
+        logger.warning('Message does not contain the specific phrase')
         return
 
     # Extract data from the message text
@@ -125,9 +158,9 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     total_gross_sale = extract_total_gross_sale(text)
     total_net_sale = extract_total_net_sale(text)
     shift_hours = extract_shift_hours(text)
-    dollar_sales = extract_dollar_sales(text)
+    dollar_sales, bonus = extract_dollar_sales(text)
 
-    if not all([name, date_shift, creator, total_gross_sale, total_net_sale, shift_hours, dollar_sales]):
+    if not all([name, date_shift, creator, total_gross_sale, total_net_sale, shift_hours, dollar_sales, bonus]):
         logger.warning(f'Invalid input format: {text}')
         await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1701 👈🏻')
         return
@@ -142,7 +175,8 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         'total_gross_sale': total_gross_sale,
         'total_net_sale': total_net_sale,
         'shift_hours': shift_hours,
-        'dollar_sales': dollar_sales
+        'dollar_sales': dollar_sales,
+        'bonus': bonus
     }))
 
     # React with a specific emoji
@@ -172,12 +206,14 @@ async def process_queue(context: CallbackContext) -> None:
                 data['ppvs'],
                 data['total_gross_sale'],
                 data['total_net_sale'],
-                data['dollar_sales']
+                data['dollar_sales'],
+                data['bonus']
             ])
             logger.info('Data successfully appended to the Google Sheet.')
 
         except Exception as e:
             logger.error(f'Failed to append data to the Google Sheet: {e}')
+
 
 def main() -> None:
     # Create the Application and pass it your bot's token.
