@@ -4,7 +4,6 @@ import gspread
 import re
 from collections import deque
 from oauth2client.service_account import ServiceAccountCredentials
-import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from dotenv import load_dotenv
@@ -41,51 +40,6 @@ sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
 # Queue to hold incoming messages
 message_queue = deque()
 
-# Define the expected message pattern
-# MESSAGE_PATTERN = re.compile(
-#     r'^Summary of Tips and VIPs for (.+?)\s*\n'
-#     r'(\w+ \d+, \d{4}):\s*(\d+[AP]M-\d+[AP]M PST)\s*\n'
-#     r'Shift\s*\((\d+) hours\)\s*\n'
-#     r'Creator\s*:\s*(.*?)\s*\n\n'
-#     r'VIP/Tips:\s*\n(.*?)\n\n'
-#     r'PPVs:\s*\n(.*?)\n\n'
-#     r'TOTAL GROSS SALE:\s*\$\s*(\d+)\s*\n'
-#     r'TOTAL NET SALE:\s*\$\s*(\d+)\s*$', re.IGNORECASE | re.DOTALL
-# )
-MESSAGE_PATTERN = re.compile(
-    r'^Summary of Tips and VIPs for (.+)\n'
-    r'(\w+ \d+, \d{4}): (\d+[AP]M-\d+[AP]M PST)\n'
-    r'Shift \((\d+) hours\)\n'
-    r'Creator\s*:\s*(.*?)\n+'
-    r'VIP/Tips:\n'
-    r'(.*?)\n+'
-    r'PPVs:\n'
-    r'(.*?)\n+'
-    r'TOTAL GROSS SALE:\s*\$\s*(\d+)\n'
-    r'TOTAL NET SALE:\s*\$\s*(\d+)\n', re.IGNORECASE | re.DOTALL
-)
-
-
-
-# Define extraction functions
-def extract_data(text):
-    logger.info(f'{text}')
-    match = MESSAGE_PATTERN.match(text)
-    logger.info(f'{match}')
-    if match:
-        return {
-            'name': match.group(1).strip(),
-            'date_shift': f"{match.group(2)} {match.group(3)}",
-            'creator': match.group(4).strip(),
-            'vip_tips': match.group(5).strip(),
-            'ppvs': match.group(6).strip(),
-            'total_gross_sale': match.group(7).strip(),
-            'total_net_sale': match.group(8).strip(),
-            'shift_hours': match.group(9).strip(),
-            'dollar_sales': match.group(10).strip(),
-        }
-    return None
-
 # Define extraction functions
 def extract_name(text):
     match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
@@ -94,7 +48,7 @@ def extract_name(text):
     return None
 
 def extract_date_shift(text):
-    match = re.search(r'(\w+ \d+, \d{4}): (\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
+    match = re.search(r'(\w+ \d+, \d{4}):\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
     if match:
         return f"{match.group(1)} {match.group(2)}"
     return None
@@ -146,14 +100,10 @@ async def start(update: Update, context: CallbackContext) -> None:
     logger.info('Received /start command')
     await update.message.reply_text('Hi! I am your bot.')
 
-
-## List of emojis to choose from
-emojis = ['📊', '📈', '📉', '💰', '👍', '✅', '🚀', '💡', '💬']
-
 # Define a function to set a reaction on a message
 async def set_reaction(context: CallbackContext, chat_id, message_id, reaction):
     try:
-        await context.bot.setMessageReaction(chat_id, message_id, reaction)
+        await context.bot.set_message_reaction(chat_id, message_id, reaction)
         logger.info(f"Reaction set to {reaction} on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
@@ -161,6 +111,10 @@ async def set_reaction(context: CallbackContext, chat_id, message_id, reaction):
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     logger.info(f'Received message: {text}')
+
+    # Check if the message contains the specific phrase
+    if 'Summary of Tips and VIPs for' not in text:
+        return
 
     # Extract data from the message text
     name = extract_name(text)
@@ -191,8 +145,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         'dollar_sales': dollar_sales
     }))
 
-    # React with a random emoji
-    random_emoji = random.choice(emojis)
+    # React with a specific emoji
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
     try:
@@ -200,7 +153,6 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         logger.info(f"Reaction on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
-
 
 async def process_queue(context: CallbackContext) -> None:
     while message_queue:
