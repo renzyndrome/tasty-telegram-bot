@@ -40,7 +40,7 @@ sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
 # Queue to hold incoming messages
 message_queue = deque()
 
-# Define extraction functions
+
 def extract_name(text):
     match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
     if match:
@@ -78,9 +78,9 @@ def extract_creator(text):
     return None
 
 def extract_vip_tips(text):
-    vip_section = re.search(r'VIP/Tips:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
-    if vip_section:
-        amounts = re.findall(r'\$(\d+)', vip_section.group(1))
+    match = re.search(r'VIP/Tips:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
+    if match:
+        amounts = re.findall(r'\$(\d+)', match.group(1))
         if amounts:
             vip_tips = ', '.join([f"${amount}" for amount in amounts])
             logger.info(f'Extracted vip_tips: {vip_tips}')
@@ -89,9 +89,9 @@ def extract_vip_tips(text):
     return None
 
 def extract_ppvs(text):
-    ppv_section = re.search(r'PPVs:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
-    if ppv_section:
-        amounts = re.findall(r'\$(\d+)', ppv_section.group(1))
+    match = re.search(r'PPVs:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
+    if match:
+        amounts = re.findall(r'\$(\d+)', match.group(1))
         if amounts:
             ppvs = ', '.join([f"${amount}" for amount in amounts])
             logger.info(f'Extracted ppvs: {ppvs}')
@@ -118,7 +118,8 @@ def extract_total_net_sale(text):
     return None
 
 def extract_dollar_sales(text):
-    match = re.search(r'\$(\d+,\d+)\s+in\s+sales\s+=\s+\$(\d+)\s+bonus', text, re.IGNORECASE)
+    logger.debug(f'Extracting dollar_sales from text: {text}')
+    match = re.search(r'\$(\d{1,3}(?:,\d{3})*)\s+in\s+sales\s+=\s+\$(\d+)\s+bonus', text, re.IGNORECASE)
     if match:
         dollar_sales = f"${match.group(1).replace(',', '').strip()}"
         bonus = f"${match.group(2).replace(',', '').strip()}"
@@ -127,18 +128,6 @@ def extract_dollar_sales(text):
     logger.warning(f'Failed to extract dollar_sales and bonus from text: {text}')
     return None, None
 
-# Define a few command handlers
-async def start(update: Update, context: CallbackContext) -> None:
-    logger.info('Received /start command')
-    await update.message.reply_text('Hi! I am your bot.')
-
-# Define a function to set a reaction on a message
-async def set_reaction(context: CallbackContext, chat_id, message_id, reaction):
-    try:
-        await context.bot.set_message_reaction(chat_id, message_id, reaction)
-        logger.info(f"Reaction set to {reaction} on message {message_id}")
-    except Exception as e:
-        logger.error(f"Failed to set reaction: {e}")
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
@@ -159,6 +148,12 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     total_net_sale = extract_total_net_sale(text)
     shift_hours = extract_shift_hours(text)
     dollar_sales, bonus = extract_dollar_sales(text)
+
+    # Log extracted data for debugging purposes
+    logger.info(f'Extracted data: name={name}, date_shift={date_shift}, creator={creator}, '
+                f'vip_tips={vip_tips}, ppvs={ppvs}, total_gross_sale={total_gross_sale}, '
+                f'total_net_sale={total_net_sale}, shift_hours={shift_hours}, '
+                f'dollar_sales={dollar_sales}, bonus={bonus}')
 
     if not all([name, date_shift, creator, total_gross_sale, total_net_sale, shift_hours, dollar_sales, bonus]):
         logger.warning(f'Invalid input format: {text}')
@@ -214,6 +209,10 @@ async def process_queue(context: CallbackContext) -> None:
         except Exception as e:
             logger.error(f'Failed to append data to the Google Sheet: {e}')
 
+async def start(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /start is issued."""
+    user = update.effective_user
+    await update.message.reply_text(f'Hello {user.first_name}! Send me your summary of tips and VIPs.')
 
 def main() -> None:
     # Create the Application and pass it your bot's token.
