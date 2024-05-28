@@ -41,7 +41,9 @@ sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
 message_queue = deque()
 
 
+# Define extraction functions with enhanced logging
 def extract_name(text):
+    logger.debug(f'Extracting name from text: {text}')
     match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
     if match:
         name = match.group(1).strip()
@@ -51,7 +53,8 @@ def extract_name(text):
     return None
 
 def extract_date_shift(text):
-    match = re.search(r'(\w+ \d+, \d{4})\s*-\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
+    logger.debug(f'Extracting date_shift from text: {text}')
+    match = re.search(r'(\w+ \d+, \d{4})\s*[:\-]\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
     if match:
         date_shift = f"{match.group(1)} {match.group(2)}"
         logger.info(f'Extracted date_shift: {date_shift}')
@@ -60,7 +63,8 @@ def extract_date_shift(text):
     return None
 
 def extract_shift_hours(text):
-    match = re.search(r'Shift\s*\((\d+)\s*hours\)', text, re.IGNORECASE)
+    logger.debug(f'Extracting shift_hours from text: {text}')
+    match = re.search(r'Shift[:\s]*\(?(\d+)\s*hours?\)?', text, re.IGNORECASE)
     if match:
         shift_hours = match.group(1).strip()
         logger.info(f'Extracted shift_hours: {shift_hours}')
@@ -69,6 +73,7 @@ def extract_shift_hours(text):
     return None
 
 def extract_creator(text):
+    logger.debug(f'Extracting creator from text: {text}')
     match = re.search(r'Creator\s*:\s*(.*)', text, re.IGNORECASE)
     if match:
         creator = match.group(1).strip()
@@ -78,6 +83,7 @@ def extract_creator(text):
     return None
 
 def extract_vip_tips(text):
+    logger.debug(f'Extracting vip_tips from text: {text}')
     match = re.search(r'VIP/Tips:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
     if match:
         amounts = re.findall(r'\$(\d+)', match.group(1))
@@ -89,6 +95,7 @@ def extract_vip_tips(text):
     return None
 
 def extract_ppvs(text):
+    logger.debug(f'Extracting ppvs from text: {text}')
     match = re.search(r'PPVs:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
     if match:
         amounts = re.findall(r'\$(\d+)', match.group(1))
@@ -100,6 +107,7 @@ def extract_ppvs(text):
     return None
 
 def extract_total_gross_sale(text):
+    logger.debug(f'Extracting total_gross_sale from text: {text}')
     match = re.search(r'TOTAL GROSS SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
     if match:
         total_gross_sale = f"${match.group(1).replace(',', '').strip()}"
@@ -109,6 +117,7 @@ def extract_total_gross_sale(text):
     return None
 
 def extract_total_net_sale(text):
+    logger.debug(f'Extracting total_net_sale from text: {text}')
     match = re.search(r'TOTAL NET SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
     if match:
         total_net_sale = f"${match.group(1).replace(',', '').strip()}"
@@ -127,7 +136,6 @@ def extract_dollar_sales(text):
         return dollar_sales, bonus
     logger.warning(f'Failed to extract dollar_sales and bonus from text: {text}')
     return None, None
-
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
