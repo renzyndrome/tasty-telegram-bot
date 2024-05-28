@@ -44,7 +44,7 @@ message_queue = deque()
 # Define extraction functions with enhanced logging
 def extract_name(text):
     logger.debug(f'Extracting name from text: {text}')
-    match = re.search(r'Summary of Tips and VIPs for\s*(.*)', text, re.IGNORECASE)
+    match = re.search(r'Summary of Tips and VIPs for:\s*(.*)', text, re.IGNORECASE)
     if match:
         name = match.group(1).strip()
         logger.info(f'Extracted name: {name}')
@@ -52,29 +52,39 @@ def extract_name(text):
     logger.warning(f'Failed to extract name from text: {text}')
     return None
 
-def extract_date_shift(text):
-    logger.debug(f'Extracting date_shift from text: {text}')
-    match = re.search(r'(\w+ \d+, \d{4})\s*[:\-]\s*(\d+[AP]M-\d+[AP]M PST)', text, re.IGNORECASE)
+def extract_date(text):
+    logger.debug(f'Extracting date from text: {text}')
+    match = re.search(r'(\d{2}/\d{2}/\d{4})', text)
     if match:
-        date_shift = f"{match.group(1)} {match.group(2)}"
-        logger.info(f'Extracted date_shift: {date_shift}')
-        return date_shift
-    logger.warning(f'Failed to extract date_shift from text: {text}')
+        date = match.group(1).strip()
+        logger.info(f'Extracted date: {date}')
+        return date
+    logger.warning(f'Failed to extract date from text: {text}')
+    return None
+
+def extract_shift(text):
+    logger.debug(f'Extracting shift from text: {text}')
+    match = re.search(r'(\d{1,2}[AP]M) to (\d{1,2}[AP]M PST)', text)
+    if match:
+        shift = f"{match.group(1)} to {match.group(2)}"
+        logger.info(f'Extracted shift: {shift}')
+        return shift
+    logger.warning(f'Failed to extract shift from text: {text}')
     return None
 
 def extract_shift_hours(text):
-    logger.debug(f'Extracting shift_hours from text: {text}')
-    match = re.search(r'Shift[:\s]*\(?(\d+)\s*hours?\)?', text, re.IGNORECASE)
+    logger.debug(f'Extracting shift hours from text: {text}')
+    match = re.search(r'Shift:\s*\((\d+)\s*hours?\)', text, re.IGNORECASE)
     if match:
         shift_hours = match.group(1).strip()
-        logger.info(f'Extracted shift_hours: {shift_hours}')
+        logger.info(f'Extracted shift hours: {shift_hours}')
         return shift_hours
-    logger.warning(f'Failed to extract shift_hours from text: {text}')
+    logger.warning(f'Failed to extract shift hours from text: {text}')
     return None
 
 def extract_creator(text):
     logger.debug(f'Extracting creator from text: {text}')
-    match = re.search(r'Creator\s*:\s*(.*)', text, re.IGNORECASE)
+    match = re.search(r'Creator\s*:\s*(.*?)\s*(?=VIP/Tips:|PPVs:|TOTAL)', text, re.IGNORECASE)
     if match:
         creator = match.group(1).strip()
         logger.info(f'Extracted creator: {creator}')
@@ -82,111 +92,89 @@ def extract_creator(text):
     logger.warning(f'Failed to extract creator from text: {text}')
     return None
 
+
 def extract_vip_tips(text):
-    logger.debug(f'Extracting vip_tips from text: {text}')
-    match = re.search(r'VIP/Tips:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
-    if match:
-        amounts = re.findall(r'\$(\d+)', match.group(1))
-        if amounts:
-            vip_tips = ', '.join([f"${amount}" for amount in amounts])
-            logger.info(f'Extracted vip_tips: {vip_tips}')
-            return vip_tips
-    logger.warning(f'Failed to extract vip_tips from text: {text}')
+    logger.debug(f'Extracting VIP/tips from text: {text}')
+    matches = re.findall(r'\$([\d,]+)\s*TIP', text, re.IGNORECASE)
+    if matches:
+        amounts = [f"${amount.replace(',', '')}" for amount in matches]
+        vip_tips = ', '.join(amounts)
+        logger.info(f'Extracted VIP/tips amounts: {vip_tips}')
+        return vip_tips
+    logger.warning(f'Failed to extract VIP/tips from text: {text}')
     return None
 
 def extract_ppvs(text):
-    logger.debug(f'Extracting ppvs from text: {text}')
-    match = re.search(r'PPVs:\s*(.*?)\n\n', text, re.IGNORECASE | re.DOTALL)
-    if match:
-        amounts = re.findall(r'\$(\d+)', match.group(1))
-        if amounts:
-            ppvs = ', '.join([f"${amount}" for amount in amounts])
-            logger.info(f'Extracted ppvs: {ppvs}')
-            return ppvs
-    logger.warning(f'Failed to extract ppvs from text: {text}')
+    logger.debug(f'Extracting PPVs from text: {text}')
+    matches = re.findall(r'\$([\d,]+)\s*PPV', text, re.IGNORECASE)
+    if matches:
+        amounts = [f"${amount.replace(',', '')}" for amount in matches]
+        ppvs = ', '.join(amounts)
+        logger.info(f'Extracted PPV amounts: {ppvs}')
+        return ppvs
+    logger.warning(f'Failed to extract PPVs from text: {text}')
     return None
 
-def extract_total_gross_sale(text):
-    logger.debug(f'Extracting total_gross_sale from text: {text}')
-    match = re.search(r'TOTAL GROSS SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
+def extract_totals(text):
+    logger.debug(f'Extracting totals from text: {text}')
+    match = re.search(r'TOTAL GROSS SALE:\s*\$([\d,]+)\s+TOTAL NET SALE:\s*\$([\d,]+)\s+TOTAL BONUS:\s*\$([\d,]+)', text, re.IGNORECASE)
     if match:
         total_gross_sale = f"${match.group(1).replace(',', '').strip()}"
-        logger.info(f'Extracted total_gross_sale: {total_gross_sale}')
-        return total_gross_sale
-    logger.warning(f'Failed to extract total_gross_sale from text: {text}')
-    return None
-
-def extract_total_net_sale(text):
-    logger.debug(f'Extracting total_net_sale from text: {text}')
-    match = re.search(r'TOTAL NET SALE:\s*\$\s*([\d,]+)', text, re.IGNORECASE)
-    if match:
-        total_net_sale = f"${match.group(1).replace(',', '').strip()}"
-        logger.info(f'Extracted total_net_sale: {total_net_sale}')
-        return total_net_sale
-    logger.warning(f'Failed to extract total_net_sale from text: {text}')
-    return None
-
-def extract_dollar_sales(text):
-    logger.debug(f'Extracting dollar_sales from text: {text}')
-    match = re.search(r'\$(\d{1,3}(?:,\d{3})*)\s+in\s+sales\s+=\s+\$(\d+)\s+bonus', text, re.IGNORECASE)
-    if match:
-        dollar_sales = f"${match.group(1).replace(',', '').strip()}"
-        bonus = f"${match.group(2).replace(',', '').strip()}"
-        logger.info(f'Extracted dollar_sales: {dollar_sales}, bonus: {bonus}')
-        return dollar_sales, bonus
-    logger.warning(f'Failed to extract dollar_sales and bonus from text: {text}')
-    return None, None
+        total_net_sale = f"${match.group(2).replace(',', '').strip()}"
+        total_bonus = f"${match.group(3).replace(',', '').strip()}"
+        logger.info(f'Extracted totals: Gross Sale: {total_gross_sale}, Net Sale: {total_net_sale}, Bonus: {total_bonus}')
+        return total_gross_sale, total_net_sale, total_bonus
+    logger.warning(f'Failed to extract totals from text: {text}')
+    return None, None, None
 
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     logger.info(f'Received message: {text}')
 
     # Check if the message contains the specific phrase
-    if 'Summary of Tips and VIPs for' not in text:
+    if 'Summary of Tips and VIPs for:' not in text:
         logger.warning('Message does not contain the specific phrase')
         return
 
     # Extract data from the message text
     name = extract_name(text)
-    date_shift = extract_date_shift(text)
+    date = extract_date(text)
+    shift = extract_shift(text)
+    shift_hours = extract_shift_hours(text)
     creator = extract_creator(text)
     vip_tips = extract_vip_tips(text)
     ppvs = extract_ppvs(text)
-    total_gross_sale = extract_total_gross_sale(text)
-    total_net_sale = extract_total_net_sale(text)
-    shift_hours = extract_shift_hours(text)
-    dollar_sales, bonus = extract_dollar_sales(text)
+    total_gross_sale, total_net_sale, total_bonus = extract_totals(text)
 
     # Log extracted data for debugging purposes
-    logger.info(f'Extracted data: name={name}, date_shift={date_shift}, creator={creator}, '
-                f'vip_tips={vip_tips}, ppvs={ppvs}, total_gross_sale={total_gross_sale}, '
-                f'total_net_sale={total_net_sale}, shift_hours={shift_hours}, '
-                f'dollar_sales={dollar_sales}, bonus={bonus}')
+    logger.info(f'Extracted data: Name={name}, Date={date}, Shift={shift}, Shift Hours={shift_hours}, Creator={creator}, '
+                f'VIP/Tips={vip_tips}, PPVs={ppvs}, Total Gross Sale={total_gross_sale}, '
+                f'Total Net Sale={total_net_sale}, Total Bonus={total_bonus}')
 
-    if not all([name, date_shift, creator, total_gross_sale, total_net_sale, shift_hours, dollar_sales, bonus]):
+    if not all([name, date, shift, shift_hours, total_gross_sale, total_net_sale, total_bonus]):
         logger.warning(f'Invalid input format: {text}')
-        await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1701 👈🏻')
+        await update.message.reply_text('Hey! Please format your summary correctly.')
         return
 
     # Add message to the queue
     message_queue.append((update.message.chat_id, {
         'name': name,
-        'date_shift': date_shift,
+        'date': date,
+        'shift': shift,
+        'shift_hours': shift_hours,
         'creator': creator,
         'vip_tips': vip_tips,
         'ppvs': ppvs,
         'total_gross_sale': total_gross_sale,
         'total_net_sale': total_net_sale,
-        'shift_hours': shift_hours,
-        'dollar_sales': dollar_sales,
-        'bonus': bonus
+        'total_bonus': total_bonus
     }))
 
-    # React with a specific emoji
+    # React with a check mark emoji
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
     try:
-        await context.bot.set_message_reaction(chat_id, message_id, reaction="🎉")
+        await context.bot.set_message_reaction(chat_id, message_id, reaction="✍")
         logger.info(f"Reaction on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
@@ -201,16 +189,16 @@ async def process_queue(context: CallbackContext) -> None:
         try:
             # Add a new row to the Google Sheet
             sheet.append_row([
-                data['date_shift'],
                 data['name'],
+                data['date'],
+                data['shift'],
                 data['shift_hours'],
                 data['creator'],
                 data['vip_tips'],
                 data['ppvs'],
                 data['total_gross_sale'],
                 data['total_net_sale'],
-                data['dollar_sales'],
-                data['bonus']
+                data['total_bonus']
             ])
             logger.info('Data successfully appended to the Google Sheet.')
 
