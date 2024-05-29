@@ -40,7 +40,6 @@ sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
 # Queue to hold incoming messages
 message_queue = deque()
 
-
 # Define extraction functions with enhanced logging
 def extract_name(text):
     logger.debug(f'Extracting name from text: {text}')
@@ -54,9 +53,9 @@ def extract_name(text):
 
 def extract_date(text):
     logger.debug(f'Extracting date from text: {text}')
-    match = re.search(r'(\d{2}/\d{2}/\d{4})', text)
+    match = re.search(r'(\d{2}/\d{2}/\d{4})|(\w+ \d+, \d{4})', text)
     if match:
-        date = match.group(1).strip()
+        date = match.group(0).strip()
         logger.info(f'Extracted date: {date}')
         return date
     logger.warning(f'Failed to extract date from text: {text}')
@@ -71,7 +70,6 @@ def extract_shift(text):
         return shift
     logger.warning(f'Failed to extract shift from text: {text}')
     return None
-
 
 def extract_shift_hours(text):
     logger.debug(f'Extracting shift hours from text: {text}')
@@ -93,10 +91,9 @@ def extract_creator(text):
     logger.warning(f'Failed to extract creator from text: {text}')
     return None
 
-
 def extract_vip_tips(text):
     logger.debug(f'Extracting VIP/tips from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*TIP', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from)\s*@\w+', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         vip_tips = ', '.join(amounts)
@@ -107,7 +104,7 @@ def extract_vip_tips(text):
 
 def extract_ppvs(text):
     logger.debug(f'Extracting PPVs from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*PPV', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from)\s*@\w+', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         ppvs = ', '.join(amounts)
