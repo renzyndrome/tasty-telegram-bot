@@ -44,7 +44,7 @@ message_queue = deque()
 # Define extraction functions with enhanced logging
 def extract_name(text):
     logger.debug(f'Extracting name from text: {text}')
-    match = re.search(r'Summary of Tips and VIPs for:\s*(.*)', text, re.IGNORECASE)
+    match = re.search(r'Summary of Tips and VIPs for[:\s]*(.*)', text, re.IGNORECASE)
     if match:
         name = match.group(1).strip()
         logger.info(f'Extracted name: {name}')
@@ -64,17 +64,18 @@ def extract_date(text):
 
 def extract_shift(text):
     logger.debug(f'Extracting shift from text: {text}')
-    match = re.search(r'(\d{1,2}[AP]M) to (\d{1,2}[AP]M PST)', text)
+    match = re.search(r'(\d{1,2}[AP]M) (to|-|–) (\d{1,2}[AP]M PST)', text)
     if match:
-        shift = f"{match.group(1)} to {match.group(2)}"
+        shift = f"{match.group(1)} to {match.group(3)}"
         logger.info(f'Extracted shift: {shift}')
         return shift
     logger.warning(f'Failed to extract shift from text: {text}')
     return None
 
+
 def extract_shift_hours(text):
     logger.debug(f'Extracting shift hours from text: {text}')
-    match = re.search(r'Shift:\s*\((\d+)\s*hours?\)', text, re.IGNORECASE)
+    match = re.search(r'Shift:\s*\(?(\d+)\s*hours?\)?', text, re.IGNORECASE)
     if match:
         shift_hours = match.group(1).strip()
         logger.info(f'Extracted shift hours: {shift_hours}')
@@ -132,7 +133,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     logger.info(f'Received message: {text}')
 
     # Check if the message contains the specific phrase
-    if 'Summary of Tips and VIPs for:' not in text:
+    if 'Summary of Tips and VIPs for' not in text:
         logger.warning('Message does not contain the specific phrase')
         return
 
