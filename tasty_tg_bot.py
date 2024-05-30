@@ -151,7 +151,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
     if not all([name, date, shift, shift_hours, total_gross_sale, total_net_sale, total_bonus]):
         logger.warning(f'Invalid input format: {text}')
-        await update.message.reply_text('Hey! Please format your summary correctly.')
+        await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1701 👈🏻')
         return
 
     # Add message to the queue
