@@ -73,13 +73,14 @@ def extract_shift(text):
 
 def extract_shift_hours(text):
     logger.debug(f'Extracting shift hours from text: {text}')
-    match = re.search(r'Shift:\s*\(?(\d+)\s*hours?\)?', text, re.IGNORECASE)
+    match = re.search(r'Shift[:\s]*\(?(\d+)\s*hours?\)?', text, re.IGNORECASE)
     if match:
         shift_hours = match.group(1).strip()
         logger.info(f'Extracted shift hours: {shift_hours}')
         return shift_hours
     logger.warning(f'Failed to extract shift hours from text: {text}')
     return None
+
 
 def extract_creator(text):
     logger.debug(f'Extracting creator from text: {text}')
@@ -93,7 +94,7 @@ def extract_creator(text):
 
 def extract_vip_tips(text):
     logger.debug(f'Extracting VIP/tips from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from)\s*@\w+', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from|@)', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         vip_tips = ', '.join(amounts)
@@ -104,7 +105,7 @@ def extract_vip_tips(text):
 
 def extract_ppvs(text):
     logger.debug(f'Extracting PPVs from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from)\s*@\w+', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from|@)', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         ppvs = ', '.join(amounts)
@@ -112,6 +113,7 @@ def extract_ppvs(text):
         return ppvs
     logger.warning(f'Failed to extract PPVs from text: {text}')
     return None
+
 
 def extract_totals(text):
     logger.debug(f'Extracting totals from text: {text}')
