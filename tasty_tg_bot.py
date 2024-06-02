@@ -115,6 +115,7 @@ def extract_ppvs(text):
     return None
 
 
+
 def extract_totals(text):
     logger.debug(f'Extracting totals from text: {text}')
     match = re.search(r'TOTAL GROSS SALE:\s*\$([\d,]+)\s+TOTAL NET SALE:\s*\$([\d,]+)\s+TOTAL BONUS:\s*\$([\d,]+)', text, re.IGNORECASE)
@@ -127,8 +128,12 @@ def extract_totals(text):
     logger.warning(f'Failed to extract totals from text: {text}')
     return None, None, None
 
+
+
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
+    chat_id = update.message.chat_id
+    message_id = update.message.message_id
     logger.info(f'Received message: {text}')
 
     # Check if the message contains the specific phrase
@@ -142,18 +147,24 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     shift = extract_shift(text)
     shift_hours = extract_shift_hours(text)
     creator = extract_creator(text)
-    vip_tips = extract_vip_tips(text)
-    ppvs = extract_ppvs(text)
+    vip_tips = extract_vip_tips(text) or "$0"
+    ppvs = extract_ppvs(text) or "$0"
     total_gross_sale, total_net_sale, total_bonus = extract_totals(text)
+
+    # Generate the message link
+    message_link = f"https://t.me/c/{chat_id}/{message_id}"
+
+    # Set default value for total bonus if it's None
+    total_bonus = total_bonus or "$0"
 
     # Log extracted data for debugging purposes
     logger.info(f'Extracted data: Name={name}, Date={date}, Shift={shift}, Shift Hours={shift_hours}, Creator={creator}, '
                 f'VIP/Tips={vip_tips}, PPVs={ppvs}, Total Gross Sale={total_gross_sale}, '
-                f'Total Net Sale={total_net_sale}, Total Bonus={total_bonus}')
+                f'Total Net Sale={total_net_sale}, Total Bonus={total_bonus}, Message Link={message_link}')
 
     if not all([name, date, shift, shift_hours, total_gross_sale, total_net_sale, total_bonus]):
         logger.warning(f'Invalid input format: {text}')
-        await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1701 👈🏻')
+        await update.message.reply_text('Hey! Please format your summary like this!\n👉🏻 https://t.me/c/1811961823/1719 👈🏻')
         return
 
     # Add message to the queue
@@ -167,17 +178,18 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         'ppvs': ppvs,
         'total_gross_sale': total_gross_sale,
         'total_net_sale': total_net_sale,
-        'total_bonus': total_bonus
+        'total_bonus': total_bonus,
+        'message_link': message_link
     }))
 
     # React with a check mark emoji
-    chat_id = update.effective_chat.id
-    message_id = update.message.message_id
     try:
         await context.bot.set_message_reaction(chat_id, message_id, reaction="✍")
         logger.info(f"Reaction on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
+
+
 
 async def process_queue(context: CallbackContext) -> None:
     while message_queue:
@@ -198,12 +210,14 @@ async def process_queue(context: CallbackContext) -> None:
                 data['ppvs'],
                 data['total_gross_sale'],
                 data['total_net_sale'],
-                data['total_bonus']
+                data['total_bonus'],
+                data['message_link']
             ])
             logger.info('Data successfully appended to the Google Sheet.')
 
         except Exception as e:
             logger.error(f'Failed to append data to the Google Sheet: {e}')
+
 
 async def start(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /start is issued."""
