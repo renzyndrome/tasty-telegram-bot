@@ -94,25 +94,25 @@ def extract_creator(text):
 
 def extract_vip_tips(text):
     logger.debug(f'Extracting VIP/tips from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from|@)', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from|@)?', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         vip_tips = ', '.join(amounts)
         logger.info(f'Extracted VIP/tips amounts: {vip_tips}')
         return vip_tips
-    logger.warning(f'Failed to extract VIP/tips from text: {text}')
-    return None
+    logger.warning(f'No VIP/tips found in text, setting to $0')
+    return '$0'
 
 def extract_ppvs(text):
     logger.debug(f'Extracting PPVs from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from|@)', text, re.IGNORECASE)
+    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from|@)?', text, re.IGNORECASE)
     if matches:
         amounts = [f"${amount.replace(',', '')}" for amount in matches]
         ppvs = ', '.join(amounts)
         logger.info(f'Extracted PPV amounts: {ppvs}')
         return ppvs
-    logger.warning(f'Failed to extract PPVs from text: {text}')
-    return None
+    logger.warning(f'No PPVs found in text, setting to $0')
+    return '$0'
 
 
 
@@ -147,15 +147,12 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     shift = extract_shift(text)
     shift_hours = extract_shift_hours(text)
     creator = extract_creator(text)
-    vip_tips = extract_vip_tips(text) or "$0"
-    ppvs = extract_ppvs(text) or "$0"
+    vip_tips = extract_vip_tips(text)
+    ppvs = extract_ppvs(text)
     total_gross_sale, total_net_sale, total_bonus = extract_totals(text)
 
     # Generate the message link
     message_link = f"https://t.me/c/{chat_id}/{message_id}"
-
-    # Set default value for total bonus if it's None
-    total_bonus = total_bonus or "$0"
 
     # Log extracted data for debugging purposes
     logger.info(f'Extracted data: Name={name}, Date={date}, Shift={shift}, Shift Hours={shift_hours}, Creator={creator}, '
@@ -188,6 +185,7 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         logger.info(f"Reaction on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
+
 
 
 
