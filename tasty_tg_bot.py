@@ -94,25 +94,32 @@ def extract_creator(text):
 
 def extract_vip_tips(text):
     logger.debug(f'Extracting VIP/tips from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:TIP|from|@)?', text, re.IGNORECASE)
-    if matches:
-        amounts = [f"${amount.replace(',', '')}" for amount in matches]
-        vip_tips = ', '.join(amounts)
-        logger.info(f'Extracted VIP/tips amounts: {vip_tips}')
-        return vip_tips
+    vip_tips_section = re.search(r'VIP/Tips:(.*?)(PPVs:|TOTAL GROSS SALE:)', text, re.DOTALL | re.IGNORECASE)
+    if vip_tips_section:
+        vip_tips_text = vip_tips_section.group(1).strip()
+        matches = re.findall(r'\$([\d,]+)', vip_tips_text)
+        if matches:
+            amounts = [f"${amount.replace(',', '')}" for amount in matches]
+            vip_tips = ', '.join(amounts)
+            logger.info(f'Extracted VIP/tips amounts: {vip_tips}')
+            return vip_tips
     logger.warning(f'No VIP/tips found in text, setting to $0')
     return '$0'
 
 def extract_ppvs(text):
     logger.debug(f'Extracting PPVs from text: {text}')
-    matches = re.findall(r'\$([\d,]+)\s*(?:PPV|from|@)?', text, re.IGNORECASE)
-    if matches:
-        amounts = [f"${amount.replace(',', '')}" for amount in matches]
-        ppvs = ', '.join(amounts)
-        logger.info(f'Extracted PPV amounts: {ppvs}')
-        return ppvs
+    ppvs_section = re.search(r'PPVs:(.*?)(TOTAL GROSS SALE:)', text, re.DOTALL | re.IGNORECASE)
+    if ppvs_section:
+        ppvs_text = ppvs_section.group(1).strip()
+        matches = re.findall(r'\$([\d,]+)', ppvs_text)
+        if matches:
+            amounts = [f"${amount.replace(',', '')}" for amount in matches]
+            ppvs = ', '.join(amounts)
+            logger.info(f'Extracted PPV amounts: {ppvs}')
+            return ppvs
     logger.warning(f'No PPVs found in text, setting to $0')
     return '$0'
+
 
 
 
