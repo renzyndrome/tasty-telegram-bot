@@ -97,7 +97,7 @@ def extract_vip_tips(text):
     vip_tips_section = re.search(r'VIP/Tips:(.*?)(PPVs:|TOTAL GROSS SALE:)', text, re.DOTALL | re.IGNORECASE)
     if vip_tips_section:
         vip_tips_text = vip_tips_section.group(1).strip()
-        matches = re.findall(r'\$([\d,]+)', vip_tips_text)
+        matches = re.findall(r'\$([\d,]+(?:\.\d{1,2})?)', vip_tips_text)
         if matches:
             amounts = [f"${amount.replace(',', '')}" for amount in matches]
             vip_tips = ', '.join(amounts)
@@ -106,12 +106,14 @@ def extract_vip_tips(text):
     logger.warning(f'No VIP/tips found in text, setting to $0')
     return '$0'
 
+
+
 def extract_ppvs(text):
     logger.debug(f'Extracting PPVs from text: {text}')
     ppvs_section = re.search(r'PPVs:(.*?)(TOTAL GROSS SALE:)', text, re.DOTALL | re.IGNORECASE)
     if ppvs_section:
         ppvs_text = ppvs_section.group(1).strip()
-        matches = re.findall(r'\$([\d,]+)', ppvs_text)
+        matches = re.findall(r'\$([\d,]+(?:\.\d{1,2})?)', ppvs_text)
         if matches:
             amounts = [f"${amount.replace(',', '')}" for amount in matches]
             ppvs = ', '.join(amounts)
@@ -122,16 +124,25 @@ def extract_ppvs(text):
 
 
 
-
 def extract_totals(text):
     logger.debug(f'Extracting totals from text: {text}')
-    match = re.search(r'TOTAL GROSS SALE:\s*\$([\d,]+)\s+TOTAL NET SALE:\s*\$([\d,]+)\s+TOTAL BONUS:\s*\$([\d,]+)', text, re.IGNORECASE)
+    match = re.search(r'TOTAL GROSS SALE:\s*\$([\d,]+(?:\.\d{1,2})?)\s+TOTAL NET SALE:\s*\$([\d,]+(?:\.\d{1,2})?)\s+TOTAL BONUS:\s*\$([\d,]+(?:\.\d{1,2})?)', text, re.IGNORECASE)
     if match:
         total_gross_sale = f"${match.group(1).replace(',', '').strip()}"
         total_net_sale = f"${match.group(2).replace(',', '').strip()}"
         total_bonus = f"${match.group(3).replace(',', '').strip()}"
         logger.info(f'Extracted totals: Gross Sale: {total_gross_sale}, Net Sale: {total_net_sale}, Bonus: {total_bonus}')
         return total_gross_sale, total_net_sale, total_bonus
+
+    # Try another pattern if the first one doesn't match
+    match = re.search(r'TOTAL GROSS SALE:\s*\$([\d,]+(?:\.\d{1,2})?)\s+TOTAL NET SALE:\s*\$([\d,]+(?:\.\d{1,2})?)\s+\$([\d,]+(?:\.\d{1,2})?)\s+in sales =\s*\$([\d,]+(?:\.\d{1,2})?)\s+bonus', text, re.IGNORECASE)
+    if match:
+        total_gross_sale = f"${match.group(1).replace(',', '').strip()}"
+        total_net_sale = f"${match.group(2).replace(',', '').strip()}"
+        total_bonus = f"${match.group(4).replace(',', '').strip()}"
+        logger.info(f'Extracted totals: Gross Sale: {total_gross_sale}, Net Sale: {total_net_sale}, Bonus: {total_bonus}')
+        return total_gross_sale, total_net_sale, total_bonus
+
     logger.warning(f'Failed to extract totals from text: {text}')
     return None, None, None
 
@@ -192,7 +203,6 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         logger.info(f"Reaction on message {message_id}")
     except Exception as e:
         logger.error(f"Failed to set reaction: {e}")
-
 
 
 
