@@ -15,4 +15,5 @@ GOOGLE_SHEET_KEY=''
    pip install -r requirements.txt
 
 4. **Run the script:**
-  python tasty_bot.py
+     ```bash
+   python tasty_tg_bot.py
